@@ -66,7 +66,7 @@ dfs ville zid visited =
     --les ids de zones qui sont adjacentes a la zid
     adjacentZones z = [zid' | (zid', z') <- toList (viZones ville), adjacentes (zoneForme (viZones ville ! z)) (zoneForme z')]
 
-
+-------------------------------------------------------------
 
 --verfie si aucune zone n'entre en collision avec une autre zone
 prop_ville_sansCollision :: Ville -> Bool
@@ -108,15 +108,15 @@ invariants_ville ville =
   invariant_adjacente_a_route ville &&
   invariant_routes_connexes ville
 
---fonction qui construit(maybe) une nouvelle ville en ajoutant une zone dans l'ancienne ville 
+--fonction qui construit(maybe) une nouvelle ville en ajoutant une zone a l'ancienne ville 
 construit :: Ville -> Zone -> Maybe Ville
 construit ville zone = let 
     zoneId = ZoneId (length (elems (viZones ville)) + 1)
     nouvelleVille = ville { viZones = insert zoneId zone (viZones ville) } in 
-        if 
-            invariant_disjoint_zones nouvelleVille && 
+        if invariant_disjoint_zones nouvelleVille && 
             invariant_adjacente_a_route nouvelleVille && 
-            invariant_routes_connexes nouvelleVille then Just nouvelleVille
+            invariant_routes_connexes nouvelleVille 
+        then Just nouvelleVille
         else Nothing
 
 --precondition pour construit
