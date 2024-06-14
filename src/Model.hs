@@ -427,6 +427,14 @@ filterCentrales_gs gs =
 
 ------------------------------------------
 
+adjacente_a_route' :: Ville -> Zone -> Bool
+adjacente_a_route' ville (Route _) = True
+adjacente_a_route' ville (Eau _) = True
+adjacente_a_route' ville (Vide _) = True
+adjacente_a_route' ville z =
+    let routes = filter estRoute (Map.elems (viZones ville))
+    in any (adjacentes (zoneForme z) . zoneForme) routes
+
 batimentStartingCoord :: Batiment -> Coord
 batimentStartingCoord (Cabane _ f _ _ _)  = formeStartingPoint f
 batimentStartingCoord (Atelier _ f _ _ _)  = formeStartingPoint f
@@ -623,79 +631,88 @@ etape gs@(GameState { gameMap = ville, player = joueur }) =
     let villeApresDeplacement = deplacerCitoyens villeApresImmigration in
     let villeApresMiseAJourEtats = miseAJourEtatsCitoyens villeApresDeplacement in
 	let villeApresAugmentationFaim = augmenterFaimCitoyens villeApresMiseAJourEtats in
-    let villeFinale = gererEmigration villeApresAugmentationFaim
-    in gs { gameMap = villeFinale }
+    -- let villeFinale = gererEmigration villeApresAugmentationFaim
+     gs { gameMap = villeApresAugmentationFaim }
 
+getCitizenPosition::Citoyen->Coord
+getCitizenPosition (Immigrant c _ _) = c
+getCitizenPosition (Habitant c _ _ _) = c
+getCitizenPosition (Emigrant c _ )= c
 
+getAllCitizenPositions::GameState->[Coord]
+getAllCitizenPositions gs =
+	let cits = getAllCitizens gs in
+	map (\x -> getCitizenPosition x) (Map.elems cits)
 
 -- ELECTRICITE CHECKS
 
-electricPathExists::Ville->Coord->Coord->Bool
-electricPathExists v src dst =
-	case astarPathfinding' src dst v of
-		Just x -> True
-		Nothing -> False
+-- electricPathExists::Ville->Coord->Coord->Bool
+-- electricPathExists v src dst =
+-- 	case astarPathfinding' src dst v of
+-- 		Just x -> True
+-- 		Nothing -> False
 
-getCentralesLocations::Ville->[Coord]
-getCentralesLocations v =
-	let centrales = filterCentrales $ getVilleMap v in
-	let centraleCoords = foldr (\x acc -> x <> acc) [] $ map (formeToCoords . zoneForme) $ Map.elems centrales in
-	centraleCoords
+-- getCentralesLocations::Ville->[Coord]
+-- getCentralesLocations v =
+-- 	let centrales = filterCentrales $ getVilleMap v in
+-- 	let centraleCoords = foldr (\x acc -> x <> acc) [] $ map (formeToCoords . zoneForme) $ Map.elems centrales in
+-- 	centraleCoords
 
-filterConnectedZones::Ville->Zone->Bool
-filterConnectedZones v z =
-	let centralecoords = getCentralesLocations v in 
-	let zonecoords = (formeToCoords . zoneForme) z in
-	let all2all = [(x,y)| x<-centralecoords,y<-zonecoords] in 
-	let connected=map (\(x,y)->electricPathExists v x y) all2all in
-	any (==True) connected 
+-- filterConnectedZones::Ville->Zone->Bool
+-- filterConnectedZones v z =
+-- 	let centralecoords = getCentralesLocations v in 
+-- 	let zonecoords = (formeToCoords . zoneForme) z in
+-- 	let all2all = [(x,y)| x<-centralecoords,y<-zonecoords] in 
+-- 	let connected=map (\(x,y)->electricPathExists v x y) all2all in
+-- 	any (==True) connected 
 
 ---- ELECTRICITE PATHFINDING
 
-astarPathfinding' :: Coord -> Coord -> Ville -> Maybe [Coord]
-astarPathfinding' start end ville = aStar (Set.singleton (Node start 0 (heuristic start end))) Set.empty Map.empty where
-    aStar reste visited cameFrom
-        | Set.null reste = Debug.Trace.trace "Open set is empty, no path found" Nothing
-        | coord currentNode == end = Debug.Trace.trace ("Path found: " ++ show (buildPath2 cameFrom end)) (Just (buildPath2 cameFrom end))
-        | otherwise = Debug.Trace.trace ("Current node: " ++ show currentNode) $
-            let
-                reste' = Set.delete currentNode reste
-                visited' = Set.insert (coord currentNode) visited
-                neighbors = filter (`Set.notMember` visited') $ getValidNeighbors' (coord currentNode) ville
-                newReste = foldr (processNeighbor currentNode) reste' neighbors
-                cameFrom' = foldr (\neighbor cf -> Map.insert neighbor (coord currentNode) cf) cameFrom neighbors
-            in aStar newReste visited' cameFrom'
-        where
-            currentNode = minimum reste
-            processNeighbor currentNode neighbor reste =
-                let newCost = costFromStart currentNode + 1 -- Coût pour se déplacer vers le voisin
-                    newNode = Node neighbor newCost (newCost + heuristic neighbor end)
-                in if Set.notMember neighbor (Set.map coord reste) || newCost < costFromStart (Set.elemAt 0 (Set.filter ((== neighbor) . coord) reste))
-                   then Set.insert newNode reste
-                   else reste
+-- astarPathfinding' :: Coord -> Coord -> Ville -> Maybe [Coord]
+-- astarPathfinding' start end ville = aStar (Set.singleton (Node start 0 (heuristic start end))) Set.empty Map.empty where
+--     aStar reste visited cameFrom
+--         | Set.null reste = Debug.Trace.trace "Open set is empty, no path found" Nothing
+--         | coord currentNode == end = Debug.Trace.trace ("Path found: " ++ show (buildPath2 cameFrom end)) (Just (buildPath2 cameFrom end))
+--         | otherwise = Debug.Trace.trace ("Current node: " ++ show currentNode) $
+--             let
+--                 reste' = Set.delete currentNode reste
+--                 visited' = Set.insert (coord currentNode) visited
+--                 neighbors = filter (`Set.notMember` visited') $ getValidNeighbors' (coord currentNode) ville
+--                 newReste = foldr (processNeighbor currentNode) reste' neighbors
+--                 cameFrom' = foldr (\neighbor cf -> Map.insert neighbor (coord currentNode) cf) cameFrom neighbors
+--             in aStar newReste visited' cameFrom'
+--         where
+--             currentNode = minimum reste
+--             processNeighbor currentNode neighbor reste =
+--                 let newCost = costFromStart currentNode + 1 -- Coût pour se déplacer vers le voisin
+--                     newNode = Node neighbor newCost (newCost + heuristic neighbor end)
+--                 in if Set.notMember neighbor (Set.map coord reste) || newCost < costFromStart (Set.elemAt 0 (Set.filter ((== neighbor) . coord) reste))
+--                    then Set.insert newNode reste
+--                    else reste
 
-buildPath2 :: Map.Map Coord Coord -> Coord -> [Coord]
-buildPath2 cameFrom current = buildPath3 cameFrom current []
+-- buildPath2 :: Map.Map Coord Coord -> Coord -> [Coord]
+-- buildPath2 cameFrom current = buildPath3 cameFrom current []
 
-buildPath3 :: Map.Map Coord Coord -> Coord -> [Coord] -> [Coord]
-buildPath3 cameFrom current path =
-    case Map.lookup current cameFrom of
-        Just prev -> buildPath3 cameFrom prev (current : path)
-        Nothing -> current : path
+-- buildPath3 :: Map.Map Coord Coord -> Coord -> [Coord] -> [Coord]
+-- buildPath3 cameFrom current path =
+--     case Map.lookup current cameFrom of
+--         Just prev -> buildPath3 cameFrom prev (current : path)
+--         Nothing -> current : path
 
-getValidNeighbors' :: Coord -> Ville -> [Coord]
-getValidNeighbors' (C x y) ville = Debug.Trace.trace ("Getting neighbors for " ++ show (C x y)) $
-    filter (isValidCoord' ville) [C (x + 1) y, C (x - 1) y, C x (y + 1), C x (y - 1)]
+-- getValidNeighbors' :: Coord -> Ville -> [Coord]
+-- getValidNeighbors' (C x y) ville = Debug.Trace.trace ("Getting neighbors for " ++ show (C x y)) $
+--     filter (isValidCoord' ville) [C (x + 1) y, C (x - 1) y, C x (y + 1), C x (y - 1)]
 
 
-isValidCoord' :: Ville -> Coord -> Bool
-isValidCoord' ville coord = Debug.Trace.trace ("Checking if " ++ show coord ++ " is valid") $
-    case trouveZoneIdParCoord coord ville of
-        Just zoneId -> case Map.lookup zoneId (viZones ville) of
-            Just zone -> isTraversable' zone
-            Nothing -> Debug.Trace.trace ("No zone found for coord: " ++ show coord) False
-        Nothing -> Debug.Trace.trace ("No zoneId found for coord: " ++ show coord) False
+-- isValidCoord' :: Ville -> Coord -> Bool
+-- isValidCoord' ville coord = Debug.Trace.trace ("Checking if " ++ show coord ++ " is valid") $
+--     case trouveZoneIdParCoord coord ville of
+--         Just zoneId -> case Map.lookup zoneId (viZones ville) of
+--             Just zone -> isTraversable' zone
+--             Nothing -> Debug.Trace.trace ("No zone found for coord: " ++ show coord) False
+--         Nothing -> Debug.Trace.trace ("No zoneId found for coord: " ++ show coord) False
 
-isTraversable' :: Zone -> Bool
-isTraversable' (Cable _) = True
-isTraversable' _ = False
+
+-- isTraversable' :: Zone -> Bool
+-- isTraversable' (Cable _) = True
+-- isTraversable' _ = False

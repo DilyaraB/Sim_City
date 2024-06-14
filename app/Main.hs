@@ -66,6 +66,14 @@ fetchRightTexture co gs@(GameState{mode=m,coordMap=cmap,gameMap=v,player=j}) =
 				otherwise -> TextureId ""
 			otherwise -> TextureId ""
 
+addCitizenSprite :: Coord -> SpriteMap -> SpriteMap
+addCitizenSprite (C x y) smap =
+	let sprite = S.defaultScale $ S.addImage S.createEmptySprite $ S.createImage (TextureId "sim") (S.mkArea 0 0 30 30) in
+	let spriteId = (SpriteId ("H"<>(show x)<>","<>(show y))) in
+	let smap' = Map.insert spriteId sprite smap in
+	smap'
+
+
 loadOneSprite :: Coord -> SpriteMap -> SpriteMap
 loadOneSprite (C x y) smap =
 	let sprite = 
@@ -137,6 +145,12 @@ loadAllSprites gs@(GameState{mode=m,coordMap=cmap,gameMap=v,player=j}) =
 	let foldedsmap = foldr (\c acc -> loadOneSprite c acc) SM.createSpriteMap clist in 
 	foldedsmap
 
+loadAllCitizenSprites::GameState->SpriteMap
+loadAllCitizenSprites gs =
+	let citpositions = getAllCitizenPositions gs in
+	let foldedsmap = foldr (\c acc -> addCitizenSprite c acc) SM.createSpriteMap citpositions in
+	foldedsmap
+
 -- TODO List with paths and fold instead of going up to tmap913984134
 loadAllTextures::Renderer -> TextureMap -> IO (TextureMap)
 loadAllTextures renderer tmap =
@@ -154,7 +168,8 @@ loadAllTextures renderer tmap =
 	tmap11 <- TM.loadTexture renderer "assets/commercial_zone.bmp" (TextureId "CZ") tmap10
 	tmap12 <- TM.loadTexture renderer "assets/atelier.bmp" (TextureId "atelier") tmap11
 	tmap13 <- TM.loadTexture renderer "assets/epicerie.bmp" (TextureId "epicerie") tmap12
-	return tmap13
+	tmap14 <- TM.loadTexture renderer "assets/sim.bmp" (TextureId "sim") tmap13
+	return tmap14
 
 addOverlaySprite :: GameState -> Coord -> SpriteMap -> SpriteMap
 addOverlaySprite gs co smap =
@@ -166,7 +181,6 @@ addOverlaySprite gs co smap =
 			Just (Centrale _) -> addCentraleSprite co smap
 			_ -> smap
 		Nothing -> smap
-
 
 ----Factorise into single function
 addZRSprite :: Coord -> SpriteMap-> SpriteMap
@@ -201,7 +215,6 @@ addCentraleSprite (C x y) smap =
 -- addOverlaySprite::Zone->SpriteMap->SpriteMap
 -- addOverlaySprite (ZR _ _) smap = Map.insert 
 
-
 updateOverlay::GameState->SpriteMap->SpriteMap
 updateOverlay gs smap = 
 	let olays = filterOverlays_gs gs in
@@ -230,6 +243,13 @@ displayAllSprites renderer tmap smap gs@(GameState{mode=m,coordMap=cmap,gameMap=
 		displayTileCoord (s,(x,y)) = S.displaySprite renderer tmap (S.moveTo (SM.fetchSprite (s) smap) 
 																		x 
 																		y)
+displayAllCitizenSprites::Renderer->TextureMap->SpriteMap->IO()
+displayAllCitizenSprites renderer tmap smap =
+	let coordList=[a | a<-(map coordFromSpriteId (Map.keys smap))] in
+	let provisoire = zip (Map.keys smap) (coordList) in
+	mapM_ (displayCitSprite) (provisoire)
+	where
+	displayCitSprite (s,(x,y)) = S.displaySprite renderer tmap (S.moveTo (SM.fetchSprite (s) smap) (x*30) (y*30))
 
 coordFromSpriteId::SpriteId->(CInt,CInt)
 coordFromSpriteId (SpriteId a) =
@@ -360,8 +380,11 @@ gameLoop frameRate renderer tmap font smap overlayMap kbd mouse gameRunner = do
 	let overlayMap'=updateOverlay gameState overlayMap
 
 	clear renderer
+	let citsmap = loadAllCitizenSprites gameState''
+
 	displayAllSprites renderer tmap smap gameState
 	displayAllOverlays renderer tmap overlayMap
+	displayAllCitizenSprites renderer tmap citsmap 
 
 	renderText renderer font (V2 (31*30) (20))  (T.pack ("Mode: "<> (displayGameMode gameState''))) 
 	renderText renderer font (V2 (31*30) (80))  (T.pack ("Population: "<> (show $ length $ Data.Map.elems $ getAllCitizens gameState''))) 
@@ -381,7 +404,7 @@ gameLoop frameRate renderer tmap font smap overlayMap kbd mouse gameRunner = do
 	let gameRunner' = updateGameRunner (updateGameStateinGameRunner gameRunner gameState'')
 
 	-- putStrLn (show $ getAllBuildings gameState'')
-	-- putStrLn (show $ getAllCitizens gameState'')
+	putStrLn (show $ getAllCitizens gameState'')
 
 	endTime <- time
 	let refreshTime = endTime - startTime
